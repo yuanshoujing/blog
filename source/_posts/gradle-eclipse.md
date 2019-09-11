@@ -387,13 +387,13 @@ public class Greeter {
 
 然后就是 Classpath -> User Entries -> Advanced，就会弹出上图的 **Advanced Options**，然后选 **Add Folders**，手工把 **src/test/resources** 加上，然后点 **Up** 让它出现在 **User Entries** 下的最前面就可以了。
 
-这一段很无趣，我知道。所以为了缓解这种情况，我特意在上面的一幅插图中画了一只可爱的小兔子，不知道你注意到没有？好了，不要往回翻了，我随口瞎说的，我哪里会画什么可爱的小兔子？不要少女心泛滥。技术大多时候就是这么一张板正的死人脸，连这样的介绍文章，想写的有趣些都几乎毫无办法。所以程序员才如此苦逼，不是吗？
+这一段很无趣，我知道。所以为了缓解这种情况，我特意在上面的一幅插图中画了一只可爱的小兔子，不知道你注意到没有？好了，不要往回翻了，我随口瞎说的，我哪里会画什么可爱的小兔子？不要少女心泛滥。技术大多时候就是看起来如此板正没意思，连这样的介绍文章，想写的有趣些都几乎毫无办法。所以程序员才如此苦逼，不是吗？
 
 但既然你已经读到了这里，我敬你是一条汉子。咱们还是要继续下去，毕竟目标还未完成。到现在为止，我们只是构造了一个单模块项目，我们的目的其实是多模块项目。
 
 ## 增加子模块
 
-回到我们最爱的命令行，在项目根目录（gradle_demo）下为子模块初始化目录结构：
+回到我们“最爱”的命令行，在项目根目录（gradle_demo）下为子模块初始化目录结构：
 
 ``` bash
 $ mkdir -p gradle_demo_domain/src/main/java
@@ -481,39 +481,195 @@ project(':gradle-demo-domain').projectDir = new File(settingsDir, './gradle_demo
 
 ![](/images/eclipse8.png)
 
+这样的话，本篇的主旨已经完成了，其实可以 Game Over 了。但是，下课了不拖课，算什么老师？开会时不补充两点，做领导怎么好意思？“见贤思齐”，我也要再啰嗦几句！
 
+## 模块间依赖
 
-## Quick Start
+子模块有了，那如何引用子模块中的内容呢？来做了试验，在子项目 **gradle-demo-domain** 的 **src/main/java** 下新建个包，比如叫 **com.example.gradle.model**，然后在它下面新建个类 **User**，代码如下：
 
-### Create a new post
+``` java
+package com.example.gradle.model;
 
-``` bash
-$ hexo new "My New Post"
+public class User {
+
+	private String name;
+
+	private String address;
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+	public String getAddress() {
+		return address;
+	}
+
+	public void setAddress(String address) {
+		this.address = address;
+	}
+
+	@Override
+	public String toString() {
+		return "来自" + address + "的" + name;
+	}
+
+}
 ```
 
-More info: [Writing](https://hexo.io/docs/writing.html)
+现在尝试一下在之前写的 **com.example.gradle.test.Greeter** 中引入这个 **User**，肯定是不行的。那怎么弄？找到根项目 **gradle_demo** 下的 **build.gradle** 打开，把它改成这样：
 
-### Run server
+``` groovy
+allprojects {
+    group = "com.example.gradle"
+    
+    apply plugin: "java"
 
-``` bash
-$ hexo server
+    sourceCompatibility = JavaVersion.VERSION_1_8
+
+    tasks.withType(JavaCompile) {
+        options.encoding = "UTF-8"
+        options.compilerArgs = ['-parameters']
+    }
+
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        // log
+        compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.26'
+        compile group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.11.2'
+    }
+}
+
+
+dependencies {
+    compile project(":gradle-demo-domain")
+}
 ```
 
-More info: [Server](https://hexo.io/docs/server.html)
+然后再在根项目上刷新一下 Gradle。接着打开 **com.example.gradle.test.Greeter**，就会发现可以顺利引入 **User** 了。加几行代码试验一下，比如改成这样：
 
-### Generate static files
+``` java
+package com.example.gradle.test;
 
-``` bash
-$ hexo generate
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.example.gradle.model.User;
+
+public class Greeter {
+	private static final Logger logger = LoggerFactory.getLogger(Greeter.class);
+
+	public static void main(String[] args) {
+		User user = new User();
+		user.setName("葡萄皮");
+		user.setAddress("吐鲁番");
+		logger.debug("--> Hello, {}!", user);
+	}
+}
 ```
 
-More info: [Generating](https://hexo.io/docs/generating.html)
+运行一下，看到类似下面这样就 OK 了。
 
-### Deploy to remote sites
-
-``` bash
-$ hexo deploy
+```
+10:40:24.030 [main] DEBUG com.example.gradle.test.Greeter - --> Hello, 来自吐鲁番的葡萄皮!
 ```
 
-More info: [Deployment](https://hexo.io/docs/deployment.html)
----
+别走，还有最后一个主题。
+
+## 发布模块
+
+如果我们编写的是一个类库项目，可能最终需要编译打包成 **jar** 供其它项目使用。那比较好的方案通常是用 [Nexus](https://www.sonatype.com/nexus-repository-oss) 搭建一个私有依赖库，然后将 **jar** 发布到这个私有依赖库。在 [Gradle](https://gradle.org) 中要完成此项任务也很方便。继续来改根项目 **gradle_demo** 下的 **build.gradle**，如下：
+
+``` groovy
+allprojects {
+    group = "com.example.gradle"
+    
+    apply plugin: "java"
+    apply plugin: "maven"
+
+    sourceCompatibility = JavaVersion.VERSION_1_8
+
+    tasks.withType(JavaCompile) {
+        options.encoding = "UTF-8"
+        options.compilerArgs = ['-parameters']
+    }
+
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        // log
+        compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.26'
+        compile group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.11.2'
+    }
+
+    configurations {
+        deployerJars
+    }
+
+    uploadArchives {
+        repositories {
+            mavenDeployer {
+                configuration = configurations.deployerJars
+                repository(url: "http://ip:port/repository/maven-releases/") {
+                    authentication(userName: "username", password: "password")
+                }
+            }
+        }
+    }
+}
+
+
+dependencies {
+    compile project(":gradle-demo-domain")
+}
+```
+
+不要完全照抄，如下部分注意按你的实际情况更改：
+
+``` groovy
+repository(url: "http://ip:port/repository/maven-releases/") {
+    authentication(userName: "username", password: "password")
+}
+```
+
+现在在项目根目录 **gradle_demo** 下输入以下命令：
+
+``` bash
+$ gradle tasks
+```
+
+会看到输出中有如下部分：
+
+```
+...
+
+Upload tasks
+------------
+uploadArchives - Uploads all artifacts belonging to configuration ':archives'
+
+...
+```
+
+试着输入以下命令：
+
+``` bash
+$ gradle uploadArchives
+```
+
+如果你之前的仓库配置没有问题，就会看到正常编译打包并自动上传到了你的私有依赖库。生活一下子美好了很多，是不是？
+
+## 结语
+
+这次是真的没了，很感谢你能读到这里。
+
+基本上，我把如何使用 Gradle 做 Java 开发，简单的描述了一遍。应该是可以解决**如何做（HOW）**这个问题，但是对于**为什么这样（WHY）**则没有过多讨论。程序员通常是学习能力很强的一个群体，相信你可以通过搜索、查资料找到答案。
+
+最后，如果发现上面的叙述中有错误的地方，可以告诉我，我找时间订正。
