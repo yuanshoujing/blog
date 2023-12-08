@@ -44,3 +44,51 @@ public static String aesDecrypt(String source, byte[] key, byte[] slat, byte[] i
     return new String(bytes, StandardCharsets.UTF_8);
 }
 ```
+
+接下来是 Nodejs 部分：
+
+```javascript
+import { promisify } from "util";
+import crypto from "crypto";
+
+const scrypt = promisify(crypto.scrypt);
+const algorithm = "aes-192-cbc";
+
+/**
+ * 加密
+ *
+ * @param {string} plainText - 明文
+ * @param {Buffer} key
+ * @param {Buffer} salt
+ * @param {Buffer} iv
+ * @return {string} base64 字符串
+ */
+export async function aesEncrypt(plainText, key, salt, iv) {
+  const pwd = await scrypt(key, slat, 24);
+  const cipher = crypto.createCipheriv(algorithm, pwd, iv);
+  let encrypted = cipher.update(plainText, "utf8", "base64url");
+  encrypted += cipher.final("base64url");
+
+  return encrypted;
+}
+
+/**
+ * 解密
+ *
+ * @param {string} encrypted - 密文，base64 编码
+ * @param {Buffer} key
+ * @param {Buffer} salt
+ * @param {Buffer} iv
+ * @return {string} 字符串
+ */
+export async function aesDecrypt(encrypted, key, salt, iv) {
+  const pwd = await scrypt(key, slat, 24);
+  const decipher = crypto.createDecipheriv(algorithm, pwd, iv);
+  let decrypted = decipher.update(encrypted, "base64url", "utf8");
+  decrypted += decipher.final("utf8");
+
+  return decrypted;
+}
+```
+
+当然，除此之外，还有其它方案。GitHub 上有个项目：[mervick/aes-everywhere](https://github.com/mervick/aes-everywhere)，提供了十几种编程语言的 AES 互操作，您可以参考。
